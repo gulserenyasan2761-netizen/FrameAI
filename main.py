@@ -16,17 +16,18 @@ from flask import Flask
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 YAYIN_URL = os.environ.get("YAYIN_URL", "https://www.youtube.com/watch?v=5jka-H-Hvy4")
 
-# --- FLASK (Render Port Yönetimi) ---
+# --- FLASK ---
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Bot aktif ve çalışıyor!"
+    return "Bot aktif!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
 
-# --- BOT MANTIĞI ---
+# --- BOT ---
 def run_bot():
+    print("LOG: Bot başlatılıyor...")
     warnings.filterwarnings("ignore")
     chrome_options = Options()
     chrome_options.add_argument("--headless")
@@ -36,54 +37,54 @@ def run_bot():
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
     driver = webdriver.Chrome(options=chrome_options)
-    driver.get(YAYIN_URL)
+    print("LOG: Chrome tarayıcı açıldı.")
     
-    # Çerezleri Yükle
     try:
-        with open('cookies.txt', 'r') as f:
-            cookies = json.load(f)
-            for cookie in cookies:
-                driver.add_cookie(cookie)
-        driver.refresh()
-        time.sleep(5)
-    except:
-        print("Çerez dosyası bulunamadı, devam ediliyor.")
+        driver.get(YAYIN_URL)
+        print(f"LOG: Şu sayfaya gidildi: {YAYIN_URL}")
+        
+        # Bekleme Süreci
+        wait = WebDriverWait(driver, 40)
+        print("LOG: Chat çerçevesi bekleniyor...")
+        chat_frame = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#chatframe")))
+        driver.switch_to.frame(chat_frame)
+        print("LOG: Chat çerçevesine girildi! Bot artık mesajları dinliyor.")
+        
+        groq_client = Groq(api_key=GROQ_API_KEY)
+        okunan_mesajlar = set()
 
-    # Iframe'i Bekle ve Bağlan
-    wait = WebDriverWait(driver, 20)
-    chat_frame = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#chatframe")))
-    driver.switch_to.frame(chat_frame)
-    
-    groq_client = Groq(api_key=GROQ_API_KEY)
-    okunan_mesajlar = set()
-    print("Bot başarıyla chat'e odaklandı!")
-
-    while True:
-        try:
-            mesajlar = driver.find_elements(By.CSS_SELECTOR, "yt-live-chat-text-message-renderer")
-            for el in mesajlar:
-                msg_id = el.get_attribute("id")
-                if msg_id in okunan_mesajlar: continue
-                
-                kullanici = el.find_element(By.CSS_SELECTOR, "#author-name").text
-                mesaj_metni = el.find_element(By.CSS_SELECTOR, "#message").text
-                okunan_mesajlar.add(msg_id)
-                
-                if mesaj_metni.startswith("!bot"):
-                    soru = mesaj_metni.replace("!bot", "").strip()
-                    if soru:
+        while True:
+            try:
+                mesajlar = driver.find_elements(By.CSS_SELECTOR, "yt-live-chat-text-message-renderer")
+                for el in mesajlar:
+                    msg_id = el.get_attribute("id")
+                    if msg_id in okunan_mesajlar: continue
+                    
+                    kullanici = el.find_element(By.CSS_SELECTOR, "#author-name").text
+                    mesaj_metni = el.find_element(By.CSS_SELECTOR, "#message").text
+                    okunan_mesajlar.add(msg_id)
+                    
+                    if mesaj_metni.startswith("!bot"):
+                        print(f"LOG: Komut alındı: {mesaj_metni}")
+                        soru = mesaj_metni.replace("!bot", "").strip()
+                        
                         response = groq_client.chat.completions.create(
                             messages=[{"role": "user", "content": soru}],
                             model="llama-3.1-8b-instant"
                         )
                         cevap = f"@{kullanici} {response.choices[0].message.content[:190]}"
-                        kutusu = driver.find_element(By.CSS_SELECTOR, "#input.yt-live-chat-text-input-field-renderer")
+                        
+                        kutusu = driver.find_element(By.CSS_SELECTOR, "#input")
                         kutusu.send_keys(cevap)
                         kutusu.send_keys(Keys.ENTER)
+                        print(f"LOG: Cevap gönderildi: {cevap}")
                         time.sleep(2)
-        except Exception as e:
-            print(f"Döngü hatası: {e}")
-            time.sleep(5)
+            except Exception as e:
+                print(f"LOG: Döngü içinde hata: {e}")
+                time.sleep(5)
+                
+    except Exception as e:
+        print(f"LOG: Kritik hata: {e}")
 
 if __name__ == "__main__":
     threading.Thread(target=run_bot, daemon=True).start()
