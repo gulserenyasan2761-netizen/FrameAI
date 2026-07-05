@@ -1,5 +1,4 @@
 import time
-import json
 import os
 import threading
 import warnings
@@ -13,10 +12,10 @@ from groq import Groq
 from flask import Flask
 
 # --- AYARLAR ---
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
+GROQ_API_KEY = "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"
 YAYIN_URL = os.environ.get("YAYIN_URL", "https://www.youtube.com/watch?v=5jka-H-Hvy4")
 
-# --- FLASK ---
+# --- FLASK SUNUCU ---
 app = Flask(__name__)
 @app.route('/')
 def home():
@@ -25,30 +24,32 @@ def home():
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
 
-# --- BOT ---
+# --- BOT MANTIĞI ---
 def run_bot():
-    print("LOG: Bot başlatılıyor...")
+    print("LOG: Bot süreci başlatılıyor...")
     warnings.filterwarnings("ignore")
+    
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    
-    driver = webdriver.Chrome(options=chrome_options)
-    print("LOG: Chrome tarayıcı açıldı.")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
     
     try:
-        driver.get(YAYIN_URL)
-        print(f"LOG: Şu sayfaya gidildi: {YAYIN_URL}")
+        print("LOG: Chrome sürücüsü oluşturuluyor...")
+        driver = webdriver.Chrome(options=chrome_options)
+        print("LOG: Chrome tarayıcı açıldı.")
         
-        # Bekleme Süreci
-        wait = WebDriverWait(driver, 40)
-        print("LOG: Chat çerçevesi bekleniyor...")
+        driver.get(YAYIN_URL)
+        print(f"LOG: Yayına gidildi: {YAYIN_URL}")
+        
+        wait = WebDriverWait(driver, 60)
+        print("LOG: Chat kutusu bekleniyor...")
         chat_frame = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#chatframe")))
         driver.switch_to.frame(chat_frame)
-        print("LOG: Chat çerçevesine girildi! Bot artık mesajları dinliyor.")
+        print("LOG: Chat kutusuna girildi, bot aktif!")
         
         groq_client = Groq(api_key=GROQ_API_KEY)
         okunan_mesajlar = set()
@@ -65,24 +66,21 @@ def run_bot():
                     okunan_mesajlar.add(msg_id)
                     
                     if mesaj_metni.startswith("!bot"):
-                        print(f"LOG: Komut alındı: {mesaj_metni}")
                         soru = mesaj_metni.replace("!bot", "").strip()
-                        
-                        response = groq_client.chat.completions.create(
-                            messages=[{"role": "user", "content": soru}],
-                            model="llama-3.1-8b-instant"
-                        )
-                        cevap = f"@{kullanici} {response.choices[0].message.content[:190]}"
-                        
-                        kutusu = driver.find_element(By.CSS_SELECTOR, "#input")
-                        kutusu.send_keys(cevap)
-                        kutusu.send_keys(Keys.ENTER)
-                        print(f"LOG: Cevap gönderildi: {cevap}")
-                        time.sleep(2)
+                        if soru:
+                            print(f"LOG: Komut alındı: {soru}")
+                            response = groq_client.chat.completions.create(
+                                messages=[{"role": "user", "content": soru}],
+                                model="llama-3.1-8b-instant"
+                            )
+                            cevap = f"@{kullanici} {response.choices[0].message.content[:190]}"
+                            kutusu = driver.find_element(By.CSS_SELECTOR, "#input")
+                            kutusu.send_keys(cevap)
+                            kutusu.send_keys(Keys.ENTER)
+                            print(f"LOG: Cevap yazıldı: {cevap}")
             except Exception as e:
-                print(f"LOG: Döngü içinde hata: {e}")
+                print(f"LOG: Döngü hatası: {e}")
                 time.sleep(5)
-                
     except Exception as e:
         print(f"LOG: Kritik hata: {e}")
 
