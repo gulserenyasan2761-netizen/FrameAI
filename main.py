@@ -13,7 +13,7 @@ from groq import Groq
 from flask import Flask
 
 # --- AYARLAR ---
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "gsk_SeninAnahtarinBurada")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 YAYIN_URL = os.environ.get("YAYIN_URL", "https://www.youtube.com/watch?v=5jka-H-Hvy4")
 
 # --- FLASK (Render Port Yönetimi) ---
